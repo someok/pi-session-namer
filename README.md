@@ -8,10 +8,11 @@ It names and periodically updates Pi sessions based on the current conversation,
 MMDD｜Type｜Topic
 ```
 
-Example:
+The naming model uses the conversation's primary language for both the type and topic:
 
 ```text
 0310｜Fix｜Handle OAuth callback errors
+0310｜修复｜处理 OAuth 回调错误
 ```
 
 [中文文档 / Chinese documentation](README.zh-CN.md)
@@ -22,6 +23,8 @@ Example:
 - Re-evaluates the current task after compaction.
 - Periodically checks for a substantial task change without calling the model every turn.
 - Keeps the session creation date stable when the topic changes.
+- Uses English for extension commands, status messages, warnings, and errors.
+- Generates the type and topic in the conversation's primary language.
 - Uses the operating system timezone by default, with IANA timezone overrides.
 - Uses the current primary agent model by default, with an optional dedicated naming model.
 - Inherits the primary agent's thinking level by default, with an optional fixed level.
@@ -117,11 +120,7 @@ Type｜Topic
 - `SKIP` leaves an unnamed session unnamed, or leaves the current name unchanged.
 - `Type｜Topic` is combined with the program-generated session date.
 
-The built-in type list is:
-
-```text
-功能、设计、修复、优化、发布、探索、文档、研究
-```
+The semantic type categories are Feature, Design, Fix, Optimization, Release, Exploration, Documentation, and Research. The model translates or expresses the selected category in the conversation's primary language instead of forcing English labels.
 
 The prompt asks the model to keep the same name for ordinary progress and only rename when the main task changes substantially.
 

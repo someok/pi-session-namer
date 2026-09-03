@@ -11,7 +11,7 @@ export const DEFAULT_CONFIG = {
   timeZone: "auto",
   checkEveryTurns: 4,
 } as const;
-export const TYPES = ["功能", "设计", "修复", "优化", "发布", "探索", "文档", "研究"] as const;
+export const TYPES = ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"] as const;
 export type ThinkingLevel = "inherit" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type Config = { model: string; thinkingLevel: ThinkingLevel; timeZone: string; checkEveryTurns: number };
 export type NameHistory = { name: string; source: "auto" | "manual"; reason: string; updatedAt: string };
@@ -30,7 +30,7 @@ export function loadConfig(path = configPath()): Config {
     }
     raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Config>;
   } catch (error) {
-    configWarning = `配置文件读取失败，将使用默认配置：${path}`;
+    configWarning = `Failed to read configuration; using defaults: ${path}`;
     raw = {};
   }
   const level = ["inherit", "off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(raw.thinkingLevel))
@@ -90,8 +90,8 @@ export function parseModelResult(raw: string, date: string): "KEEP" | "SKIP" | s
   value = value.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
   if (/^KEEP$/i.test(value)) return "KEEP";
   if (/^SKIP$/i.test(value) || !value) return "SKIP";
-  const match = value.match(/^([^｜|]{1,4})[｜|](.+)$/);
-  if (!match || !(TYPES as readonly string[]).includes(match[1])) return null;
+  const match = value.match(/^([^｜|]{1,24})[｜|](.+)$/);
+  if (!match || !match[1].trim()) return null;
   const subject = match[2].trim().replace(/[｜|]/g, "").slice(0, 20);
   return subject ? `${date}｜${match[1]}｜${subject}` : null;
 }
@@ -127,7 +127,7 @@ function modelFor(ctx: ExtensionContext, config: Config): { model: typeof ctx.mo
 }
 
 function promptFor(state: State, currentName: string | undefined, conversation: string): string {
-  return `你是 Pi 会话命名助手。请判断当前会话正在做什么。\n\n规则：\n- 只输出 KEEP、SKIP 或“类型｜主题”。\n- 类型必须是：${TYPES.join("、")}。\n- 主题简洁具体，适合侧栏，不超过 20 个字。\n- 只有主要任务明显变化时才输出新名称；同一任务的普通进展输出 KEEP。\n- 内容不足或无法判断时输出 SKIP。\n- 不要输出项目路径、文件路径、解释或 Markdown。\n- 当前会话日期由程序固定为 ${state.date}，不要输出日期。\n\n当前名称：${currentName ?? state.autoName ?? "（未命名）"}\n\n<conversation>\n${conversation}\n</conversation>`;
+  return `You are Pi's session naming assistant. Determine what this session is currently working on.\n\nRules:\n- Output only KEEP, SKIP, or "Type｜Topic".\n- Choose one type from: ${TYPES.join(", ")}, or use an equivalent label in the conversation's primary language.\n- Keep the topic concise, specific, and suitable for a sidebar.\n- Use the primary language of the conversation for both the type and topic.\n- Do not repeat the project name or include project/file paths.\n- Output a new name only when the main task has substantially changed; output KEEP for ordinary progress on the same task.\n- Output SKIP when the conversation is too short or has no clear task.\n- Do not output a date, explanation, quotes, or Markdown.\n- The program will prepend the fixed session date: ${state.date}.\n\nCurrent name: ${currentName ?? state.autoName ?? "(unnamed)"}\n\n<conversation>\n${conversation}\n</conversation>`;
 }
 
 function thinkingOptions(model: { api: string; reasoning: boolean; thinkingLevelMap?: Partial<Record<string, string | null>> }, level: ThinkingLevel): Record<string, unknown> {
@@ -178,10 +178,10 @@ export default function sessionNamer(pi: ExtensionAPI) {
     if (!manual && !ctx.sessionManager.getSessionFile()) return;
     if (config.model !== "inherit") {
       const selection = modelFor(ctx, config);
-      if (selection.fellBack && selection.model) notify(ctx, `配置的命名模型不可用，已回退到主 agent：${ctx.model?.provider ?? "unknown"}/${ctx.model?.id ?? "unknown"}`, "warning");
+      if (selection.fellBack && selection.model) notify(ctx, `Configured naming model is unavailable; falling back to the primary agent: ${ctx.model?.provider ?? "unknown"}/${ctx.model?.id ?? "unknown"}`, "warning");
     }
     if (running || current.manualLock || (!manual && attempts >= 3)) {
-      if (manual && current.manualLock) notify(ctx, "当前会话名称已锁定，请先执行 /session-name-unlock。", "warning");
+      if (manual && current.manualLock) notify(ctx, "The session name is locked. Run /session-name-unlock first.", "warning");
       return;
     }
     running = true;
@@ -198,16 +198,16 @@ export default function sessionNamer(pi: ExtensionAPI) {
         attempts = 0;
         turns = 0;
         persist(next);
-        if (manual || !current.autoName) notify(ctx, `会话名称已更新：${result}`);
+        if (manual || !current.autoName) notify(ctx, `Session name updated: ${result}`);
       } else {
         if (result === "KEEP" || result === "SKIP") attempts = 0;
         turns = 0;
         const actualName = pi.getSessionName();
         if (actualName && result === "KEEP") next.autoName = actualName;
         persist(next);
-        if (manual) notify(ctx, result === "KEEP" ? "当前会话名称仍然准确，未修改。" : result === "SKIP" ? "当前内容不足，未更新会话名称。" : "未能生成有效的会话名称。", result === "KEEP" ? "info" : "warning");
+        if (manual) notify(ctx, result === "KEEP" ? "The current session name is still accurate; no changes made." : result === "SKIP" ? "Not enough context to update the session name." : "No valid session name was generated.", result === "KEEP" ? "info" : "warning");
       }
-    } catch (error) { if (manual) notify(ctx, `会话命名失败：${error instanceof Error ? error.message : String(error)}`, "error"); }
+    } catch (error) { if (manual) notify(ctx, `Session naming failed: ${error instanceof Error ? error.message : String(error)}`, "error"); }
     finally { running = false; }
   };
 
@@ -244,21 +244,21 @@ export default function sessionNamer(pi: ExtensionAPI) {
     } else persist({ ...current, turnsSinceCheck: turns });
   });
 
-  pi.registerCommand("session-name-refresh", { description: "根据当前对话立即刷新 session 名称", handler: async (_args, ctx) => {
-    notify(ctx, "正在分析当前会话，准备刷新名称……", "info");
+  pi.registerCommand("session-name-refresh", { description: "Refresh the session name from the current conversation", handler: async (_args, ctx) => {
+    notify(ctx, "Analyzing the current session to refresh its name…", "info");
     await run(ctx, "refresh", true);
   } });
-  pi.registerCommand("session-name-lock", { description: "锁定当前 session 名称", handler: async (_args, ctx) => {
+  pi.registerCommand("session-name-lock", { description: "Lock the current session name", handler: async (_args, ctx) => {
     const current = ensureState(ctx);
-    if (!pi.getSessionName()) return notify(ctx, "当前没有会话名称，无法锁定。", "warning");
+    if (!pi.getSessionName()) return notify(ctx, "There is no session name to lock.", "warning");
     persist({ ...current, manualLock: true });
-    notify(ctx, "会话名称已锁定。", "info");
+    notify(ctx, "Session name locked.", "info");
   } });
-  pi.registerCommand("session-name-unlock", { description: "解除 session 名称锁定", handler: async (_args, ctx) => {
+  pi.registerCommand("session-name-unlock", { description: "Unlock automatic session naming", handler: async (_args, ctx) => {
     const current = ensureState(ctx);
-    if (!current.manualLock) return notify(ctx, "当前会话名称未锁定。", "info");
+    if (!current.manualLock) return notify(ctx, "The session name is not locked.", "info");
     persist({ ...current, manualLock: false });
-    notify(ctx, "会话名称已解锁。需要更新名称时，请执行 /session-name-refresh。", "info");
+    notify(ctx, "Session name unlocked. Run /session-name-refresh when you want to update it.", "info");
   } });
-  pi.registerCommand("session-name-status", { description: "查看 session 命名状态", handler: async (_args, ctx) => { const current = ensureState(ctx); const next = config.checkEveryTurns === 0 ? "已关闭" : `${Math.max(0, config.checkEveryTurns - turns)} 轮后`; notify(ctx, `当前名称：${pi.getSessionName() ?? "未命名"}\n状态：${current.manualLock ? "已锁定" : "自动管理"}\n下次检查：${next}`, "info"); } });
+  pi.registerCommand("session-name-status", { description: "Show the session naming status", handler: async (_args, ctx) => { const current = ensureState(ctx); const next = config.checkEveryTurns === 0 ? "disabled" : `in ${Math.max(0, config.checkEveryTurns - turns)} settled run(s)`; notify(ctx, `Current name: ${pi.getSessionName() ?? "(unnamed)"}\nStatus: ${current.manualLock ? "locked" : "automatic"}\nNext check: ${next}`, "info"); } });
 }
