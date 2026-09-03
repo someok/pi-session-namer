@@ -92,7 +92,7 @@ export function parseModelResult(raw: string, date: string): "KEEP" | "SKIP" | s
   if (/^SKIP$/i.test(value) || !value) return "SKIP";
   const match = value.match(/^([^｜|]{1,24})[｜|](.+)$/);
   if (!match || !match[1].trim()) return null;
-  const subject = match[2].trim().replace(/[｜|]/g, "").slice(0, 20);
+  const subject = match[2].trim().replace(/[｜|]/g, "").slice(0, 60);
   return subject ? `${date}｜${match[1]}｜${subject}` : null;
 }
 

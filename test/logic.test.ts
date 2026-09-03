@@ -15,7 +15,8 @@ test("parses model control responses", () => {
   assert.equal(parseModelResult("KEEP", "0310"), "KEEP");
   assert.equal(parseModelResult("SKIP", "0310"), "SKIP");
   assert.equal(parseModelResult("修复｜OAuth 回调错误", "0310"), "0310｜修复｜OAuth 回调错误");
-  assert.equal(parseModelResult("Documentation｜Rewrite installation guide", "0310"), "0310｜Documentation｜Rewrite installation");
+  assert.equal(parseModelResult("Research｜GitHub skills discovery", "0310"), "0310｜Research｜GitHub skills discovery");
+  assert.equal(parseModelResult("Documentation｜Rewrite installation guide", "0310"), "0310｜Documentation｜Rewrite installation guide");
   assert.equal(parseModelResult("Optimización｜Mejorar el inicio", "0310"), "0310｜Optimización｜Mejorar el inicio");
   assert.equal(parseModelResult("随便猜一个", "0310"), null);
 });

@@ -51,12 +51,6 @@ Install as a Pi package from Git:
 pi install git:github.com/joshua-zyy/pi-session-namer
 ```
 
-For a local package installation:
-
-```bash
-pi install D:/AI/agentBySelf/pi-extensions/pi-session-namer
-```
-
 Restart Pi or run `/reload` after installation or source changes.
 
 ## Commands

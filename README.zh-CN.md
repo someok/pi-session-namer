@@ -51,12 +51,6 @@ pi install npm:pi-session-namer
 pi install git:github.com/joshua-zyy/pi-session-namer
 ```
 
-从本地目录安装：
-
-```bash
-pi install D:/AI/agentBySelf/pi-extensions/pi-session-namer
-```
-
 安装或修改源码后，重新启动 Pi，或执行：
 
 ```text
