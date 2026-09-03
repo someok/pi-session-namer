@@ -4,6 +4,15 @@
   "description": "Automatically name and update Pi sessions from the current conversation",
   "type": "module",
   "license": "MIT",
+  "author": "Joshua Zeng",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshua-zyy/pi-session-namer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joshua-zyy/pi-session-namer/issues"
+  },
+  "homepage": "https://github.com/joshua-zyy/pi-session-namer#readme",
   "keywords": [
     "pi-package",
     "pi-extension",

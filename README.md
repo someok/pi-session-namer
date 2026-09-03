@@ -39,10 +39,16 @@ Install from the local repository while developing:
 pi -e ./src/index.ts
 ```
 
+Install as a Pi package from npm:
+
+```bash
+pi install npm:pi-session-namer
+```
+
 Install as a Pi package from Git:
 
 ```bash
-pi install git:<user>/pi-session-namer
+pi install git:github.com/joshua-zyy/pi-session-namer
 ```
 
 For a local package installation:

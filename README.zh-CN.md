@@ -39,10 +39,16 @@ MMDD｜类型｜主题
 pi -e ./src/index.ts
 ```
 
+从 npm 安装为 Pi package：
+
+```bash
+pi install npm:pi-session-namer
+```
+
 从 Git 安装为 Pi package：
 
 ```bash
-pi install git:<用户名>/pi-session-namer
+pi install git:github.com/joshua-zyy/pi-session-namer
 ```
 
 从本地目录安装：
