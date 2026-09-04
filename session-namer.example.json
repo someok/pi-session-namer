@@ -2,5 +2,8 @@
   "model": "inherit",
   "thinkingLevel": "inherit",
   "timeZone": "auto",
-  "checkEveryTurns": 4
+  "checkEveryTurns": 4,
+  "nameFormat": "{date}｜{type}｜{topic}｜{progress}",
+  "types": ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"],
+  "nameLanguage": "auto"
 }

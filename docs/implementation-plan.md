@@ -65,11 +65,13 @@ pi 的 session 名称默认不一定能准确反映当前工作内容。当一�
 
 ## 5. 名称规则
 
-最终名称格式：
+最终名称格式（默认）：
 
 ```text
-MMDD｜类型｜主题
+MMDD｜类型｜主题｜进度
 ```
+
+进度段可选：名称格式模板包含 `{progress}` 占位符时才生成，用户可通过 `nameFormat` 配置删除它。进度最多 16 字符，由模型从当前任务状态提炼（如“已发布0.1.1”、“测试中”）。用户可通过 `nameFormat` 自定义整体格式，支持 `{date}`、`{type}`、`{topic}`、`{progress}` 占位符；日期始终由程序注入。
 
 ### 5.1 日期
 
@@ -81,7 +83,13 @@ MMDD｜类型｜主题
 
 ### 5.2 类型
 
-模型从功能、设计、修复、优化、发布、探索、文档、研究这八个语义类别中选择，并使用当前对话的主要语言表达类型标签。例如中文可使用“修复”，英文可使用“Fix”。
+默认类型白名单为：
+
+```text
+Feature、Design、Fix、Optimization、Release、Exploration、Documentation、Research
+```
+
+用户可通过 `types` 配置自定义类型列表；提示词只允许模型从用户配置的类别中选择。模型以命名语言表达选定的类别标签。
 
 ### 5.3 主题
 
@@ -235,9 +243,14 @@ C:\Users\<用户名>\.pi\agent\session-namer.json
   "model": "inherit",
   "thinkingLevel": "inherit",
   "timeZone": "auto",
-  "checkEveryTurns": 4
+  "checkEveryTurns": 4,
+  "nameFormat": "{date}｜{type}｜{topic}｜{progress}",
+  "types": ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"],
+  "nameLanguage": "auto"
 }
 ```
+
+旧版配置文件（仅含前四个字段）完全兼容：缺失的新字段自动使用默认值，不覆盖用户文件。
 
 默认文件创建失败时，只警告一次并继续使用内存默认值，不阻止 pi 启动。
 
@@ -249,6 +262,11 @@ C:\Users\<用户名>\.pi\agent\session-namer.json
 | `thinkingLevel` | `inherit` | 继承触发时主 agent；或配置固定等级 |
 | `timeZone` | `auto` | 使用系统时区；或配置 IANA 时区名 |
 | `checkEveryTurns` | `4` | 正整数表示周期；`0` 关闭普通周期检查 |
+| `nameFormat` | `{date}｜{type}｜{topic}｜{progress}` | 名称渲染模板，占位符 `{date}` `{type}` `{topic}` `{progress}` |
+| `types` | 八个默认类型 | 注入提示词的类型白名单 |
+| `nameLanguage` | `auto` | `auto` 跟随对话语言；或语言标签强制指定 |
+
+`nameFormat` 必须包含 `{type}` 和 `{topic}`，否则回退默认模板。
 
 负数、非数字或不支持的配置使用对应默认值。配置 JSON 损坏时警告一次并使用默认配置，不重建或覆盖用户文件。
 
@@ -300,7 +318,7 @@ max → xhigh → high → medium → low → minimal → off
 
 ### 12.2 输出协议
 
-模型只允许返回以下三种结果：
+模型只允许返回以下结果：
 
 ```text
 KEEP
@@ -314,20 +332,21 @@ SKIP
 类型｜主题
 ```
 
-程序负责补充稳定日期：
-
 ```text
-MMDD｜类型｜主题
+类型｜主题｜进度
 ```
+
+（第三段仅在名称格式包含 `{progress}` 时请求。）程序按用户配置的 `nameFormat` 渲染最终名称，日期由程序注入。
 
 语义：
 
-- `KEEP`：当前名称仍准确，不更新。
+- `KEEP`：任务与进度均无实质变化，不更新。
 - `SKIP`：内容不足以生成可靠名称，保留当前状态，未来可以重试。
 - `类型｜主题`：任务已明确，按规则生成或更新名称。
+- `类型｜主题｜进度`：任务已明确且进度可判断；任务未变但进度推进时，保持类型和主题不变，仅更新进度段（最多 16 字符）。
 - 其他输出：视为非法，不修改名称。
 
-提示词必须要求：只有主要任务发生明显变化时才输出新类型和主题；同一任务的普通进展应返回 `KEEP`。
+提示词必须要求：只有主要任务发生明显变化或进度需要更新时才输出新名称；任务与进度均无变化时返回 `KEEP`。
 
 ## 13. 错误、并发与重试
 

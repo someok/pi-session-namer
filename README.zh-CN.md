@@ -5,15 +5,17 @@
 插件会根据当前对话内容，为 Pi session 自动生成并定期更新名称，格式为：
 
 ```text
-MMDD｜类型｜主题
+MMDD｜类型｜主题｜进度
 ```
 
-命名模型会根据对话的主要语言决定类型和主题所使用的语言：
+示例：
 
 ```text
-0310｜修复｜处理 OAuth 回调错误
-0310｜Fix｜Handle OAuth callback errors
+0310｜修复｜处理 OAuth 回调错误｜测试中
+0310｜Fix｜Handle OAuth callback errors｜testing
 ```
+
+可选的进度段展示任务当前进展，让用户不仅能认出会话在做什么，还能想起进行到哪里了。
 
 [English documentation / 英文文档](README.md)
 
@@ -23,7 +25,9 @@ MMDD｜类型｜主题
 - session 压缩后重新判断当前任务。
 - 不在每轮调用模型，按配置周期检查任务是否发生明显变化。
 - 插件命令说明、状态提示、警告和错误统一使用英文。
-- session 的类型和主题使用当前对话的主要语言。
+- session 的类型、主题和进度使用当前对话的主要语言（也可配置固定语言）。
+- 可选进度段（最多 16 字符）随任务推进自动更新。
+- 支持自定义名称格式模板、类型列表和命名语言。
 - 主题变化时保持 session 创建日期不变。
 - 默认使用操作系统时区，也支持配置 IANA 时区。
 - 默认使用当前主 agent 模型，也支持配置独立的命名模型。
@@ -83,7 +87,10 @@ session 被锁定后，所有自动更新都会跳过。
   "model": "inherit",
   "thinkingLevel": "inherit",
   "timeZone": "auto",
-  "checkEveryTurns": 4
+  "checkEveryTurns": 4,
+  "nameFormat": "{date}｜{type}｜{topic}｜{progress}",
+  "types": ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"],
+  "nameLanguage": "auto"
 }
 ```
 
@@ -97,6 +104,9 @@ session 被锁定后，所有自动更新都会跳过。
 | `thinkingLevel` | `inherit` | 继承主 agent 当前思考强度，也可以设置 `low`、`medium`、`high` 等固定等级。 |
 | `timeZone` | `auto` | 使用操作系统时区，也可以指定 `America/New_York` 等 IANA 时区。 |
 | `checkEveryTurns` | `4` | 每 N 次 settled 的 agent 运行检查一次。设置为 `0` 可关闭普通周期检查，但保留首次命名、压缩后检查和手动刷新。 |
+| `nameFormat` | `{date}｜{type}｜{topic}｜{progress}` | 名称渲染模板。占位符：`{date}`、`{type}`、`{topic}`、`{progress}`。删除 `{progress}` 即关闭进度段。 |
+| `types` | 八个默认类型 | 注入命名提示词的类型白名单，可增加、删除或翻译类别。 |
+| `nameLanguage` | `auto` | `auto` 跟随对话主要语言；也可设置为 `en`、`zh` 等语言标签强制指定。 |
 
 配置在插件启动时读取。修改配置后执行：
 
@@ -128,7 +138,9 @@ SKIP
 - `SKIP`：未命名 session 继续保持未命名；已有名称保持不变。
 - `类型｜主题`：插件会为其补充程序确定的 session 日期。
 
-语义类型包括：功能、设计、修复、优化、发布、探索、文档和研究。模型会将选定类型表达为当前对话使用的主要语言，不会强制使用中文或英文标签。
+语义类型默认为：功能、设计、修复、优化、发布、探索、文档和研究（英文默认 Feature、Design、Fix 等）。模型会将选定类型表达为命名使用的语言；可以通过 `types` 配置自定义类别列表。
+
+当名称格式包含 `{progress}` 时，模型还会输出简短的进度状态（最多 16 字符）。若主要任务未变但进度推进，只更新进度段；无法判断进度时省略该段。
 
 提示词要求模型在普通进展时保持原名称，只有主要任务发生明显变化时才更新名称。
 

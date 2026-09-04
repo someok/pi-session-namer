@@ -5,15 +5,17 @@ An automatic session naming extension for [Pi](https://github.com/badlogic/pi-mo
 It names and periodically updates Pi sessions based on the current conversation, using the following format:
 
 ```text
-MMDD｜Type｜Topic
+MMDD｜Type｜Topic｜Progress
 ```
 
-The naming model uses the conversation's primary language for both the type and topic:
+Examples:
 
 ```text
-0310｜Fix｜Handle OAuth callback errors
-0310｜修复｜处理 OAuth 回调错误
+0310｜Fix｜Handle OAuth callback errors｜testing
+0310｜修复｜处理 OAuth 回调错误｜待审查
 ```
+
+The optional progress segment shows where the task currently stands, so you can recall not only what a session is about but also how far it has gone.
 
 [中文文档 / Chinese documentation](README.zh-CN.md)
 
@@ -24,7 +26,9 @@ The naming model uses the conversation's primary language for both the type and 
 - Periodically checks for a substantial task change without calling the model every turn.
 - Keeps the session creation date stable when the topic changes.
 - Uses English for extension commands, status messages, warnings, and errors.
-- Generates the type and topic in the conversation's primary language.
+- Generates the type, topic, and progress in the conversation's primary language (or a language you configure).
+- Shows an optional progress segment (max 16 characters) that is kept up to date as the task advances.
+- Lets you customize the name format, type list, and naming language.
 - Uses the operating system timezone by default, with IANA timezone overrides.
 - Uses the current primary agent model by default, with an optional dedicated naming model.
 - Inherits the primary agent's thinking level by default, with an optional fixed level.
@@ -79,7 +83,10 @@ It never overwrites an existing file. The default configuration is:
   "model": "inherit",
   "thinkingLevel": "inherit",
   "timeZone": "auto",
-  "checkEveryTurns": 4
+  "checkEveryTurns": 4,
+  "nameFormat": "{date}｜{type}｜{topic}｜{progress}",
+  "types": ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"],
+  "nameLanguage": "auto"
 }
 ```
 
@@ -93,6 +100,9 @@ A complete example is available in [`session-namer.example.json`](session-namer.
 | `thinkingLevel` | `inherit` | Follow the primary agent's current thinking level, or set a fixed level such as `low`, `medium`, or `high`. |
 | `timeZone` | `auto` | Use the operating system timezone, or specify an IANA timezone such as `America/New_York`. |
 | `checkEveryTurns` | `4` | Check every N settled agent runs. Set to `0` to disable periodic checks while keeping initial, compaction, and manual refresh behavior. |
+| `nameFormat` | `{date}｜{type}｜{topic}｜{progress}` | Template used to render the name. Placeholders: `{date}`, `{type}`, `{topic}`, `{progress}`. Remove `{progress}` to disable the progress segment. |
+| `types` | The eight default types | Type whitelist injected into the naming prompt. Customize the list to add, remove, or translate categories. |
+| `nameLanguage` | `auto` | `auto` follows the conversation's primary language; set a language tag like `en` or `zh` to force it. |
 
 Configuration is loaded when the extension starts. Run `/reload` after editing the file.
 
@@ -120,7 +130,9 @@ Type｜Topic
 - `SKIP` leaves an unnamed session unnamed, or leaves the current name unchanged.
 - `Type｜Topic` is combined with the program-generated session date.
 
-The semantic type categories are Feature, Design, Fix, Optimization, Release, Exploration, Documentation, and Research. The model translates or expresses the selected category in the conversation's primary language instead of forcing English labels.
+The semantic type categories default to Feature, Design, Fix, Optimization, Release, Exploration, Documentation, and Research. The model expresses the selected category in the naming language; you can customize the list via the `types` config.
+
+When the name format contains `{progress}`, the model also outputs a short progress status (at most 16 characters). If the main task is unchanged but progress advanced, only the progress segment is updated. If progress cannot be determined, the segment is omitted.
 
 The prompt asks the model to keep the same name for ordinary progress and only rename when the main task changes substantially.
 

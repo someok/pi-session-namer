@@ -5,15 +5,27 @@ import { uuidv7 } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const ENTRY_TYPE = "pi-session-namer";
+export const DEFAULT_TYPES = ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"] as const;
 export const DEFAULT_CONFIG = {
   model: "inherit",
   thinkingLevel: "inherit",
   timeZone: "auto",
   checkEveryTurns: 4,
+  nameFormat: "{date}｜{type}｜{topic}｜{progress}",
+  types: [...DEFAULT_TYPES],
+  nameLanguage: "auto",
 } as const;
-export const TYPES = ["Feature", "Design", "Fix", "Optimization", "Release", "Exploration", "Documentation", "Research"] as const;
+export const PLACEHOLDERS = ["{date}", "{type}", "{topic}", "{progress}"] as const;
 export type ThinkingLevel = "inherit" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type Config = { model: string; thinkingLevel: ThinkingLevel; timeZone: string; checkEveryTurns: number };
+export type Config = {
+  model: string;
+  thinkingLevel: ThinkingLevel;
+  timeZone: string;
+  checkEveryTurns: number;
+  nameFormat: string;
+  types: string[];
+  nameLanguage: string;
+};
 export type NameHistory = { name: string; source: "auto" | "manual"; reason: string; updatedAt: string };
 export type State = { version: 1; autoName?: string; manualLock: boolean; date: string; timeZone: string; turnsSinceCheck: number; history: NameHistory[] };
 let configWarning: string | undefined;
@@ -37,7 +49,12 @@ export function loadConfig(path = configPath()): Config {
     ? String(raw.thinkingLevel) as ThinkingLevel : DEFAULT_CONFIG.thinkingLevel;
   const turns = typeof raw.checkEveryTurns === "number" && Number.isInteger(raw.checkEveryTurns) && raw.checkEveryTurns >= 0
     ? raw.checkEveryTurns : DEFAULT_CONFIG.checkEveryTurns;
-  return { model: typeof raw.model === "string" && raw.model ? raw.model : DEFAULT_CONFIG.model, thinkingLevel: level, timeZone: typeof raw.timeZone === "string" && raw.timeZone ? raw.timeZone : DEFAULT_CONFIG.timeZone, checkEveryTurns: turns };
+  const nameFormat = typeof raw.nameFormat === "string" && raw.nameFormat.includes("{type}") && raw.nameFormat.includes("{topic}")
+    ? raw.nameFormat : DEFAULT_CONFIG.nameFormat;
+  const types = Array.isArray(raw.types) && raw.types.length > 0 && raw.types.every((t) => typeof t === "string" && t.trim())
+    ? raw.types.map((t) => t.trim()) : [...DEFAULT_CONFIG.types];
+  const nameLanguage = typeof raw.nameLanguage === "string" && raw.nameLanguage ? raw.nameLanguage : DEFAULT_CONFIG.nameLanguage;
+  return { model: typeof raw.model === "string" && raw.model ? raw.model : DEFAULT_CONFIG.model, thinkingLevel: level, timeZone: typeof raw.timeZone === "string" && raw.timeZone ? raw.timeZone : DEFAULT_CONFIG.timeZone, checkEveryTurns: turns, nameFormat, types, nameLanguage };
 }
 
 export function resolveTimeZone(value: string): string {
@@ -85,15 +102,50 @@ export function buildConversationText(entries: Entry[], maxMessages = 12, maxCha
   return output.join("\n\n").slice(0, maxChars);
 }
 
-export function parseModelResult(raw: string, date: string): "KEEP" | "SKIP" | string | null {
+export function renderName(nameFormat: string, parts: { date: string; type: string; topic: string; progress?: string }): string {
+  return nameFormat
+    .replace(/\{date\}/g, parts.date)
+    .replace(/\{type\}/g, parts.type)
+    .replace(/\{topic\}/g, parts.topic)
+    .replace(/\{progress\}/g, parts.progress ?? "");
+}
+
+function cleanupName(name: string): string {
+  return name
+    .replace(/(^\s+)|(\s*[｜|]\s*)+$/g, "")
+    .replace(/\s*[｜|]\s*([｜|]\s*)+/g, "｜")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function parseModelResult(raw: string, date: string, nameFormat: string = DEFAULT_CONFIG.nameFormat): "KEEP" | "SKIP" | string | null {
   let value = raw.trim().replace(/^```\w*\s*/i, "").replace(/```\s*$/i, "").trim();
   value = value.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
   if (/^KEEP$/i.test(value)) return "KEEP";
   if (/^SKIP$/i.test(value) || !value) return "SKIP";
-  const match = value.match(/^([^｜|]{1,24})[｜|](.+)$/);
-  if (!match || !match[1].trim()) return null;
-  const subject = match[2].trim().replace(/[｜|]/g, "").slice(0, 60);
-  return subject ? `${date}｜${match[1]}｜${subject}` : null;
+  const wantsProgress = nameFormat.includes("{progress}");
+  const two = value.match(/^([^｜|]{1,24})[｜|](.+)$/);
+  if (two && two[1].trim()) {
+    const type = two[1].trim();
+    const rest = two[2].trim();
+    let topic = rest;
+    let progress: string | undefined;
+    if (wantsProgress) {
+      const progressSplit = rest.match(/^(.+?)[｜|]([^｜|]+)$/);
+      if (progressSplit) {
+        topic = progressSplit[1].trim().replace(/[｜|]/g, "").slice(0, 60);
+        progress = progressSplit[2].trim().slice(0, 16);
+      } else {
+        topic = rest.replace(/[｜|]/g, "").slice(0, 60);
+      }
+    } else {
+      const topicOnly = rest.split(/[｜|]/)[0].trim().slice(0, 60);
+      topic = topicOnly;
+    }
+    if (!topic) return null;
+    return cleanupName(renderName(nameFormat, { date, type, topic, progress })) || null;
+  }
+  return null;
 }
 
 function latestState(ctx: ExtensionContext): State | undefined {
@@ -126,8 +178,18 @@ function modelFor(ctx: ExtensionContext, config: Config): { model: typeof ctx.mo
   return { model: ctx.model && ctx.modelRegistry.hasConfiguredAuth(ctx.model) ? ctx.model : undefined, fellBack: false };
 }
 
-function promptFor(state: State, currentName: string | undefined, conversation: string): string {
-  return `You are Pi's session naming assistant. Determine what this session is currently working on.\n\nRules:\n- Output only KEEP, SKIP, or "Type｜Topic".\n- Choose one type from: ${TYPES.join(", ")}, or use an equivalent label in the conversation's primary language.\n- Keep the topic concise, specific, and suitable for a sidebar.\n- Use the primary language of the conversation for both the type and topic.\n- Do not repeat the project name or include project/file paths.\n- Output a new name only when the main task has substantially changed; output KEEP for ordinary progress on the same task.\n- Output SKIP when the conversation is too short or has no clear task.\n- Do not output a date, explanation, quotes, or Markdown.\n- The program will prepend the fixed session date: ${state.date}.\n\nCurrent name: ${currentName ?? state.autoName ?? "(unnamed)"}\n\n<conversation>\n${conversation}\n</conversation>`;
+function promptFor(state: State, currentName: string | undefined, conversation: string, config: Config): string {
+  const wantsProgress = config.nameFormat.includes("{progress}");
+  const languageRule = config.nameLanguage === "auto"
+    ? "Use the primary language of the conversation for the type, topic, and progress."
+    : `Write the type, topic, and progress in this language: ${config.nameLanguage}.`;
+  const outputRule = wantsProgress
+    ? '- Output only KEEP, SKIP, "Type｜Topic", or "Type｜Topic｜Progress".'
+    : '- Output only KEEP, SKIP, or "Type｜Topic".';
+  const progressRules = wantsProgress
+    ? `\n- Progress is a short status of where the task currently stands, at most 16 characters (e.g. "published 0.1.1", "testing", "待审查").\n- When the main task is unchanged but progress advanced, keep the type and topic identical and output the same name with only the progress updated.\n- Omit the progress only when you genuinely cannot determine it.`
+    : "";
+  return `You are Pi's session naming assistant. Determine what this session is currently working on.\n\nRules:\n${outputRule}\n- Choose one type from: ${config.types.join(", ")}, or use an equivalent label in the naming language.\n- Keep the topic concise, specific, and suitable for a sidebar.\n${languageRule}\n- Do not repeat the project name or include project/file paths.\n- Output a new name only when the main task has substantially changed or the progress needs updating; output KEEP when nothing substantial changed.${progressRules}\n- Output SKIP when the conversation is too short or has no clear task.\n- Do not output a date, explanation, quotes, or Markdown.\n- The program will apply the date and the name format: ${config.nameFormat}.\n\nCurrent name: ${currentName ?? state.autoName ?? "(unnamed)"}\n\n<conversation>\n${conversation}\n</conversation>`;
 }
 
 function thinkingOptions(model: { api: string; reasoning: boolean; thinkingLevelMap?: Partial<Record<string, string | null>> }, level: ThinkingLevel): Record<string, unknown> {
@@ -155,9 +217,9 @@ async function generate(pi: ExtensionAPI, ctx: ExtensionContext, config: Config,
   const configuredLevel = config.thinkingLevel === "inherit" ? (ctx.thinkingLevel ?? "off") : config.thinkingLevel;
   const options = { sessionId: uuidv7(), cacheRetention: "none" as const, ...thinkingOptions(model, configuredLevel) };
   const currentName = pi.getSessionName();
-  const response = await ctx.modelRegistry.complete(model, { messages: [{ role: "user", content: [{ type: "text", text: promptFor(state, currentName, conversation) }], timestamp: Date.now() }] }, options as never);
+  const response = await ctx.modelRegistry.complete(model, { messages: [{ role: "user", content: [{ type: "text", text: promptFor(state, currentName, conversation, config) }], timestamp: Date.now() }] }, options as never);
   const text = response.content.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join("\n");
-  return parseModelResult(text, state.date);
+  return parseModelResult(text, state.date, config.nameFormat);
 }
 
 export default function sessionNamer(pi: ExtensionAPI) {
