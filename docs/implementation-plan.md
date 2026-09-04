@@ -144,7 +144,8 @@ Feature、Design、Fix、Optimization、Release、Exploration、Documentation、
 ```json
 {
   "version": 1,
-  "autoName": "0310｜功能｜实现 OAuth 登录",
+  "autoName": "0310｜功能｜实现 OAuth 登录｜已发布",
+  "segments": { "type": "功能", "topic": "实现 OAuth 登录", "progress": "已发布" },
   "manualLock": false,
   "date": "0310",
   "timeZone": "America/New_York",
@@ -318,11 +319,7 @@ max → xhigh → high → medium → low → minimal → off
 
 ### 12.2 输出协议
 
-模型只允许返回以下结果：
-
-```text
-KEEP
-```
+模型始终返回分段描述：
 
 ```text
 SKIP
@@ -336,17 +333,15 @@ SKIP
 类型｜主题｜进度
 ```
 
-（第三段仅在名称格式包含 `{progress}` 时请求。）程序按用户配置的 `nameFormat` 渲染最终名称，日期由程序注入。
+（第三段仅在名称格式包含 `{progress}` 时请求。）程序解析为结构化分段（type/topic/progress）后，由代码 diff 决定行为：
 
-语义：
+- 分段与上次完全相同 → no-op（不改名、不写历史）。
+- type/topic 不变、仅 progress 变化 → 静默更新名称，不通知。
+- type/topic 变化 → 更新名称，首次命名与手动 refresh 通知。
+- 模型违规输出 KEEP → 视为无效输出（null），本次不改名。
+- 其他无法解析的输出 → 视为无效，不修改名称。
 
-- `KEEP`：任务与进度均无实质变化，不更新。
-- `SKIP`：内容不足以生成可靠名称，保留当前状态，未来可以重试。
-- `类型｜主题`：任务已明确，按规则生成或更新名称。
-- `类型｜主题｜进度`：任务已明确且进度可判断；任务未变但进度推进时，保持类型和主题不变，仅更新进度段（最多 16 字符）。
-- 其他输出：视为非法，不修改名称。
-
-提示词必须要求：只有主要任务发生明显变化或进度需要更新时才输出新名称；任务与进度均无变化时返回 `KEEP`。
+提示词要求模型：当前名称的 type/topic 仍能描述任务时必须逐字复用；进度必须以对话末尾的最新证据为准（如 "published 0.1.1"、"fix verified"），不得在更晚里程碑已达成时报告更早阶段。
 
 ## 13. 错误、并发与重试
 

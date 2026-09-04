@@ -27,7 +27,9 @@ export type Config = {
   nameLanguage: string;
 };
 export type NameHistory = { name: string; source: "auto" | "manual"; reason: string; updatedAt: string };
-export type State = { version: 1; autoName?: string; manualLock: boolean; date: string; timeZone: string; turnsSinceCheck: number; history: NameHistory[] };
+export type NameSegments = { type: string; topic: string; progress?: string };
+export type ModelResult = "SKIP" | NameSegments;
+export type State = { version: 1; autoName?: string; segments?: NameSegments; manualLock: boolean; date: string; timeZone: string; turnsSinceCheck: number; history: NameHistory[] };
 let configWarning: string | undefined;
 
 type Entry = { type?: string; customType?: string; data?: unknown; timestamp?: string; summary?: string; message?: { role?: string; content?: unknown } };
@@ -77,13 +79,13 @@ function textOf(content: unknown): string {
 }
 
 export function buildConversationText(entries: Entry[], maxMessages = 12, maxChars = 5000): string {
-  const output: string[] = [];
-  let size = 0;
+  // First pass: collect the newest window of message/summary lines.
+  const picked: { line: string; size: number }[] = [];
   for (const entry of entries) {
-    if (output.length >= maxMessages || size >= maxChars) continue;
+    if (picked.length >= maxMessages) continue;
     if (entry.type === "compaction" && entry.summary) {
-      output.push(`Summary: ${entry.summary.slice(0, 700)}`);
-      size += output.at(-1)!.length;
+      const line = `Summary: ${entry.summary.slice(0, 700)}`;
+      picked.push({ line, size: line.length });
       continue;
     }
     if (entry.type !== "message") continue;
@@ -94,20 +96,58 @@ export function buildConversationText(entries: Entry[], maxMessages = 12, maxCha
     const toolNames = Array.isArray(entry.message?.content)
       ? entry.message.content.filter((part): part is { type?: string; name?: string } => Boolean(part) && typeof part === "object" && (part as { type?: string }).type === "toolCall").map((part) => part.name).filter(Boolean)
       : [];
-    const clipped = text.slice(0, 700);
+    // Keep the full text here; the second pass allocates budgets so the
+    // latest evidence (e.g. a completion report) dominates the window.
     const toolSuffix = toolNames.length ? `\nTools: ${toolNames.join(", ")}` : "";
-    const line = `${role === "user" ? "User" : "Assistant"}: ${clipped}${toolSuffix}`;
-    output.push(line); size += line.length;
+    const line = `${role === "user" ? "User" : "Assistant"}: ${text}${toolSuffix}`;
+    picked.push({ line, size: line.length });
   }
-  return output.join("\n\n").slice(0, maxChars);
+  // Newest-first re-truncation: the last message keeps up to 2000 chars,
+  // earlier ones keep 700, under the global maxChars budget.
+  let budget = maxChars;
+  const trimmed: string[] = []
+  for (let i = picked.length - 1; i >= 0; i--) {
+    const limit = i === picked.length - 1 ? 2000 : 700;
+    const kept = picked[i].line.slice(0, limit);
+    if (kept.length >= budget) { trimmed.unshift(kept.slice(0, Math.max(0, budget))); break; }
+    budget -= kept.length;
+    trimmed.unshift(kept);
+  }
+  return trimmed.join("\n\n").slice(0, maxChars);
+}
+
+export function parseModelSegments(raw: string, wantsProgress: boolean): ModelResult | null {
+  let value = raw.trim().replace(/^```\w*\s*/i, "").replace(/```\s*$/i, "").trim();
+  value = value.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+  if (/^SKIP$/i.test(value) || !value) return "SKIP";
+  const two = value.match(/^([^｜|]{1,24})[｜|](.+)$/);
+  if (!two || !two[1].trim()) return null;
+  const type = two[1].trim();
+  const rest = two[2].trim();
+  let topic = rest;
+  let progress: string | undefined;
+  if (wantsProgress) {
+    const progressSplit = rest.match(/^(.+?)[｜|]([^｜|]+)$/);
+    if (progressSplit) {
+      topic = progressSplit[1].trim().slice(0, 60);
+      progress = progressSplit[2].trim().slice(0, 16);
+    } else {
+      topic = rest.slice(0, 60);
+    }
+  } else {
+    const topicOnly = rest.split(/[｜|]/)[0].trim();
+    topic = topicOnly.slice(0, 60);
+  }
+  if (!topic) return null;
+  return { type, topic, progress };
 }
 
 export function renderName(nameFormat: string, parts: { date: string; type: string; topic: string; progress?: string }): string {
-  return nameFormat
+  return cleanupName(nameFormat
     .replace(/\{date\}/g, parts.date)
     .replace(/\{type\}/g, parts.type)
     .replace(/\{topic\}/g, parts.topic)
-    .replace(/\{progress\}/g, parts.progress ?? "");
+    .replace(/\{progress\}/g, parts.progress ?? ""));
 }
 
 function cleanupName(name: string): string {
@@ -118,34 +158,11 @@ function cleanupName(name: string): string {
     .trim();
 }
 
-export function parseModelResult(raw: string, date: string, nameFormat: string = DEFAULT_CONFIG.nameFormat): "KEEP" | "SKIP" | string | null {
-  let value = raw.trim().replace(/^```\w*\s*/i, "").replace(/```\s*$/i, "").trim();
-  value = value.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
-  if (/^KEEP$/i.test(value)) return "KEEP";
-  if (/^SKIP$/i.test(value) || !value) return "SKIP";
-  const wantsProgress = nameFormat.includes("{progress}");
-  const two = value.match(/^([^｜|]{1,24})[｜|](.+)$/);
-  if (two && two[1].trim()) {
-    const type = two[1].trim();
-    const rest = two[2].trim();
-    let topic = rest;
-    let progress: string | undefined;
-    if (wantsProgress) {
-      const progressSplit = rest.match(/^(.+?)[｜|]([^｜|]+)$/);
-      if (progressSplit) {
-        topic = progressSplit[1].trim().replace(/[｜|]/g, "").slice(0, 60);
-        progress = progressSplit[2].trim().slice(0, 16);
-      } else {
-        topic = rest.replace(/[｜|]/g, "").slice(0, 60);
-      }
-    } else {
-      const topicOnly = rest.split(/[｜|]/)[0].trim().slice(0, 60);
-      topic = topicOnly;
-    }
-    if (!topic) return null;
-    return cleanupName(renderName(nameFormat, { date, type, topic, progress })) || null;
-  }
-  return null;
+export function parseModelResult(raw: string, date: string, nameFormat: string = DEFAULT_CONFIG.nameFormat): "SKIP" | string | null {
+  const segments = parseModelSegments(raw, nameFormat.includes("{progress}"));
+  if (segments === null) return null;
+  if (segments === "SKIP") return "SKIP";
+  return renderName(nameFormat, { date, ...segments }) || null;
 }
 
 function latestState(ctx: ExtensionContext): State | undefined {
@@ -178,18 +195,21 @@ function modelFor(ctx: ExtensionContext, config: Config): { model: typeof ctx.mo
   return { model: ctx.model && ctx.modelRegistry.hasConfiguredAuth(ctx.model) ? ctx.model : undefined, fellBack: false };
 }
 
-function promptFor(state: State, currentName: string | undefined, conversation: string, config: Config): string {
+function promptFor(state: State, contextLine: string, conversation: string, config: Config): string {
   const wantsProgress = config.nameFormat.includes("{progress}");
   const languageRule = config.nameLanguage === "auto"
     ? "Use the primary language of the conversation for the type, topic, and progress."
     : `Write the type, topic, and progress in this language: ${config.nameLanguage}.`;
   const outputRule = wantsProgress
-    ? '- Output only KEEP, SKIP, "Type｜Topic", or "Type｜Topic｜Progress".'
-    : '- Output only KEEP, SKIP, or "Type｜Topic".';
+    ? '- Output "Type｜Topic｜Progress"; output SKIP only if there is no clear task.'
+    : '- Output "Type｜Topic"; output SKIP only if there is no clear task.';
+  const reuseRule = wantsProgress
+    ? "- If the current name's type and topic still describe the main task, reuse them EXACTLY as written; only the progress may change."
+    : "- If the current name's type and topic still describe the main task, output them EXACTLY as written.";
   const progressRules = wantsProgress
-    ? `\n- Progress is a short status of where the task currently stands, at most 16 characters (e.g. "published 0.1.1", "implementation done", "待审查").\n- Progress must describe the milestone or completion status of the main task, NOT the topic most recently discussed.\n- When the main task is unchanged but progress advanced, keep the type and topic identical and output the same name with only the progress updated.\n- Omit the progress only when you genuinely cannot determine it.`
+    ? `\n- Progress states the latest status of the main task (e.g. "published 0.1.1", "fix verified", "待审查"), at most 16 characters. Anchor it to the latest evidence near the END of the conversation; never report an earlier phase when a later milestone has already been reached.`
     : "";
-  return `You are Pi's session naming assistant. Determine what this session is currently working on.\n\nRules:\n${outputRule}\n- Choose one type from: ${config.types.join(", ")}, or use an equivalent label in the naming language.\n- Keep the topic concise, specific, and suitable for a sidebar.\n${languageRule}\n- Do not repeat the project name or include project/file paths.\n- Output a new name only when the main task has substantially changed or the progress needs updating; output KEEP when nothing substantial changed.${progressRules}\n- Output SKIP when the conversation is too short or has no clear task.\n- Do not output a date, explanation, quotes, or Markdown.\n- The program will apply the date and the name format: ${config.nameFormat}.\n\nCurrent name: ${currentName ?? state.autoName ?? "(unnamed)"}\n\n<conversation>\n${conversation}\n</conversation>`;
+  return `You are Pi's session naming assistant. Describe what this session is working on and its latest state.\n\nOutput rules:\n${outputRule}\n${reuseRule}\n- Type must be one of: ${config.types.join(", ")}, or an equivalent label in the naming language.\n- Topic is concise and specific, suitable for a sidebar.\n${languageRule}\n- No project name, file paths, dates, explanations, quotes, or Markdown.${progressRules}\n- The program will apply the date and the name format: ${config.nameFormat}.\n\n${contextLine}\n\n<conversation>\n${conversation}\n</conversation>`;
 }
 
 function thinkingOptions(model: { api: string; reasoning: boolean; thinkingLevelMap?: Partial<Record<string, string | null>> }, level: ThinkingLevel): Record<string, unknown> {
@@ -208,7 +228,7 @@ function thinkingOptions(model: { api: string; reasoning: boolean; thinkingLevel
   return {};
 }
 
-async function generate(pi: ExtensionAPI, ctx: ExtensionContext, config: Config, state: State): Promise<"KEEP" | "SKIP" | string | null> {
+async function generate(pi: ExtensionAPI, ctx: ExtensionContext, config: Config, state: State): Promise<ModelResult | null> {
   const selection = modelFor(ctx, config);
   const model = selection.model;
   if (!model) return null;
@@ -216,10 +236,12 @@ async function generate(pi: ExtensionAPI, ctx: ExtensionContext, config: Config,
   if (!conversation) return "SKIP";
   const configuredLevel = config.thinkingLevel === "inherit" ? (ctx.thinkingLevel ?? "off") : config.thinkingLevel;
   const options = { sessionId: uuidv7(), cacheRetention: "none" as const, ...thinkingOptions(model, configuredLevel) };
-  const currentName = pi.getSessionName();
-  const response = await ctx.modelRegistry.complete(model, { messages: [{ role: "user", content: [{ type: "text", text: promptFor(state, currentName, conversation, config) }], timestamp: Date.now() }] }, options as never);
+  const contextLine = state.segments
+    ? `Current type and topic (reuse them EXACTLY as written if they still describe the main task): ${state.segments.type}｜${state.segments.topic}`
+    : `Current name: ${pi.getSessionName() ?? state.autoName ?? "(unnamed)"}`;
+  const response = await ctx.modelRegistry.complete(model, { messages: [{ role: "user", content: [{ type: "text", text: promptFor(state, contextLine, conversation, config) }], timestamp: Date.now() }] }, options as never);
   const text = response.content.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join("\n");
-  return parseModelResult(text, state.date, config.nameFormat);
+  return parseModelSegments(text, config.nameFormat.includes("{progress}"));
 }
 
 export default function sessionNamer(pi: ExtensionAPI) {
@@ -251,23 +273,34 @@ export default function sessionNamer(pi: ExtensionAPI) {
     try {
       const result = await generate(pi, ctx, config, current);
       const next = { ...current, turnsSinceCheck: 0, history: [...current.history] };
-      if (result && result !== "KEEP" && result !== "SKIP") {
-        internalNameChange = true;
-        pi.setSessionName(result);
-        next.autoName = result;
-        next.history.push({ name: result, source: "auto", reason, updatedAt: new Date().toISOString() });
-        next.history = next.history.slice(-5);
+      if (result && result !== "SKIP") {
+        const prev = current.segments;
+        const taskChanged = !prev || prev.type !== result.type || prev.topic !== result.topic;
+        const progressChanged = prev?.progress !== result.progress;
+        const rendered = renderName(config.nameFormat, { date: current.date, ...result });
+        if (!rendered) { persist(next); if (manual) notify(ctx, "No valid session name was generated.", "warning"); return; }
         attempts = 0;
         turns = 0;
+        if (rendered === pi.getSessionName()) {
+          next.segments = result;
+          persist(next);
+          if (manual) notify(ctx, "The current session name is still accurate; no changes made.");
+          return;
+        }
+        internalNameChange = true;
+        pi.setSessionName(rendered);
+        next.autoName = rendered;
+        next.segments = result;
+        next.history.push({ name: rendered, source: "auto", reason, updatedAt: new Date().toISOString() });
+        next.history = next.history.slice(-5);
         persist(next);
-        if (manual || !current.autoName) notify(ctx, `Session name updated: ${result}`);
+        if (manual || !current.autoName) notify(ctx, `Session name updated: ${rendered}`);
+        else if (!taskChanged && progressChanged) { /* silent progress update */ }
       } else {
-        if (result === "KEEP" || result === "SKIP") attempts = 0;
+        if (result === "SKIP") attempts = 0;
         turns = 0;
-        const actualName = pi.getSessionName();
-        if (actualName && result === "KEEP") next.autoName = actualName;
         persist(next);
-        if (manual) notify(ctx, result === "KEEP" ? "The current session name is still accurate; no changes made." : result === "SKIP" ? "Not enough context to update the session name." : "No valid session name was generated.", result === "KEEP" ? "info" : "warning");
+        if (manual) notify(ctx, result === "SKIP" ? "Not enough context to update the session name." : "No valid session name was generated.", result === "SKIP" ? "info" : "warning");
       }
     } catch (error) { if (manual) notify(ctx, `Session naming failed: ${error instanceof Error ? error.message : String(error)}`, "error"); }
     finally { running = false; }

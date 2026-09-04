@@ -132,7 +132,13 @@ Type｜Topic
 
 The semantic type categories default to Feature, Design, Fix, Optimization, Release, Exploration, Documentation, and Research. The model expresses the selected category in the naming language; you can customize the list via the `types` config.
 
-When the name format contains `{progress}`, the model also outputs a short progress status (at most 16 characters). If the main task is unchanged but progress advanced, only the progress segment is updated. If progress cannot be determined, the segment is omitted.
+The naming model always describes the task with segments; the extension itself decides whether anything changed by comparing the segments with the previous ones:
+
+- No change → nothing happens (no rename, no history entry).
+- Only the progress changed → the name is updated silently.
+- The type or topic changed → the name is updated (first naming and manual refresh show a notification).
+
+When the name format contains `{progress}`, the model also outputs a short progress status (at most 16 characters) anchored to the latest evidence in the conversation. The optional progress segment shows where the task currently stands, so you can recall not only what a session is about but also how far it has gone.
 
 The prompt asks the model to keep the same name for ordinary progress and only rename when the main task changes substantially.
 
