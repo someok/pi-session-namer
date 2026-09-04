@@ -20,6 +20,26 @@ test("buildConversationText emphasizes the newest message", () => {
   assert.ok(text.split("x").length - 1 > 700);
 });
 
+test("buildConversationText keeps the newest message intact under budget pressure", () => {
+  // 12 long messages: the first 11 fill the budget, so the oldest must be
+  // dropped while the newest (with a completion report) stays intact.
+  const filler = "y".repeat(700);
+  const entries = [] as { type: string; message: { role: string; content: unknown } }[];
+  for (let i = 0; i < 11; i++) {
+    entries.push({ type: "message", message: { role: "assistant", content: [{ type: "text", text: filler }] } });
+  }
+  const report = "重启后验证正常：系统状态正常，蓝屏事件为 0，任务完成。";
+  entries.push({ type: "message", message: { role: "assistant", content: [{ type: "text", text: report }] } });
+  const text = buildConversationText(entries as never, 12, 5000);
+  // The completion report survives untouched.
+  assert.ok(text.includes(report));
+  // Budget: 5000 - report(~40) = ~4960; each earlier message capped at 700 → about 7 kept.
+  const yCount = text.split("y").length - 1;
+  assert.ok(yCount <= 7 * 700);
+  // And the oldest messages were dropped, not the newest.
+  assert.ok(text.trimEnd().endsWith(report));
+});
+
 test("falls back for an invalid timezone", () => {
   assert.doesNotThrow(() => resolveTimeZone("Not/AZone"));
 });

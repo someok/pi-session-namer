@@ -102,18 +102,25 @@ export function buildConversationText(entries: Entry[], maxMessages = 12, maxCha
     const line = `${role === "user" ? "User" : "Assistant"}: ${text}${toolSuffix}`;
     picked.push({ line, size: line.length });
   }
-  // Newest-first re-truncation: the last message keeps up to 2000 chars,
-  // earlier ones keep 700, under the global maxChars budget.
-  let budget = maxChars;
-  const trimmed: string[] = []
-  for (let i = picked.length - 1; i >= 0; i--) {
-    const limit = i === picked.length - 1 ? 2000 : 700;
+  // Newest-first budget allocation: the newest message gets up to 2000 chars
+  // (using only what it actually needs), earlier ones up to 700 each, and when
+  // the budget runs out the OLDEST messages are dropped so the latest
+  // evidence (e.g. a completion report) always survives intact. Separators
+  // ("\n\n") are counted against the budget so the final slice never trims
+  // the newest message's tail.
+  const SEP = 2;
+  const total = picked.length;
+  const newest = picked[total - 1]?.line.slice(0, 2000) ?? "";
+  let budget = maxChars - newest.length;
+  const trimmed: string[] = budget > 0 ? [newest] : [newest.slice(0, maxChars)];
+  for (let i = total - 2; i >= 0; i--) {
+    if (budget <= SEP) break;
+    const limit = Math.min(700, budget - SEP);
     const kept = picked[i].line.slice(0, limit);
-    if (kept.length >= budget) { trimmed.unshift(kept.slice(0, Math.max(0, budget))); break; }
-    budget -= kept.length;
     trimmed.unshift(kept);
+    budget -= kept.length + SEP;
   }
-  return trimmed.join("\n\n").slice(0, maxChars);
+  return trimmed.join("\n\n");
 }
 
 export function parseModelSegments(raw: string, wantsProgress: boolean): ModelResult | null {
