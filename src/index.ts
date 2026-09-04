@@ -81,8 +81,8 @@ function textOf(content: unknown): string {
 export function buildConversationText(entries: Entry[], maxMessages = 12, maxChars = 5000): string {
   // First pass: collect the newest window of message/summary lines.
   const picked: { line: string; size: number }[] = [];
-  for (const entry of entries) {
-    if (picked.length >= maxMessages) continue;
+  for (let i = entries.length - 1; i >= 0 && picked.length < maxMessages; i--) {
+    const entry = entries[i];
     if (entry.type === "compaction" && entry.summary) {
       const line = `Summary: ${entry.summary.slice(0, 700)}`;
       picked.push({ line, size: line.length });
@@ -102,6 +102,7 @@ export function buildConversationText(entries: Entry[], maxMessages = 12, maxCha
     const line = `${role === "user" ? "User" : "Assistant"}: ${text}${toolSuffix}`;
     picked.push({ line, size: line.length });
   }
+  picked.reverse();
   // Newest-first budget allocation: the newest message gets up to 2000 chars
   // (using only what it actually needs), earlier ones up to 700 each, and when
   // the budget runs out the OLDEST messages are dropped so the latest

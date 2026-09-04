@@ -40,6 +40,23 @@ test("buildConversationText keeps the newest message intact under budget pressur
   assert.ok(text.trimEnd().endsWith(report));
 });
 
+test("buildConversationText selects the newest message window", () => {
+  const entries = [
+    { type: "message", message: { role: "user", content: "OLDEST_SENTINEL" } },
+    ...Array.from({ length: 13 }, (_, index) => ({
+      type: "message",
+      message: { role: "assistant", content: `middle-${index}` },
+    })),
+    { type: "message", message: { role: "assistant", content: "NEWEST_SENTINEL" } },
+  ];
+
+  const text = buildConversationText(entries as never, 12, 50_000);
+
+  assert.ok(!text.includes("OLDEST_SENTINEL"));
+  assert.ok(text.includes("NEWEST_SENTINEL"));
+  assert.ok(text.trimEnd().endsWith("NEWEST_SENTINEL"));
+});
+
 test("falls back for an invalid timezone", () => {
   assert.doesNotThrow(() => resolveTimeZone("Not/AZone"));
 });

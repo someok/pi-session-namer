@@ -1,6 +1,6 @@
 {
   "name": "pi-session-namer",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Automatically name and update Pi sessions from the current conversation",
   "type": "module",
   "license": "MIT",
