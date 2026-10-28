@@ -2,6 +2,8 @@
 
 An automatic session naming extension for [Pi](https://github.com/badlogic/pi-mono).
 
+> This is a fork of [joshua-zyy/pi-session-namer](https://github.com/joshua-zyy/pi-session-namer), published to npm as `@someok/pi-session-namer`. It carries fixes that are not merged upstream.
+
 It names and periodically updates Pi sessions based on the current conversation, using the following format:
 
 ```text
@@ -46,16 +48,18 @@ pi -e ./src/index.ts
 Install as a Pi package from npm:
 
 ```bash
-pi install npm:pi-session-namer
+pi install npm:@someok/pi-session-namer
 ```
 
 Install as a Pi package from Git:
 
 ```bash
-pi install git:github.com/joshua-zyy/pi-session-namer
+pi install git:github.com/someok/pi-session-namer
 ```
 
 Restart Pi or run `/reload` after installation or source changes.
+
+Do not install this package and the upstream `pi-session-namer` at the same time. Both use the same configuration file (`~/.pi/agent/session-namer.json`) and the same session entry type, so they would overwrite each other's state.
 
 ## Commands
 

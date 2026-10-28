@@ -1,8 +1,8 @@
 # pi-session-namer 实施方案
 
-- **状态**：待实现
-- **版本**：v0.1
-- **仓库**：`D:\AI\agentBySelf\pi-extensions\pi-session-namer`
+- **状态**：已实现（v0.4.0）
+- **版本**：v0.4.0
+- **仓库**：`https://github.com/someok/pi-session-namer`
 - **插件名称**：`pi-session-namer`
 - **配置文件**：`~/.pi/agent/session-namer.json`
 

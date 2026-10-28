@@ -1,23 +1,28 @@
 {
-  "name": "pi-session-namer",
-  "version": "0.3.2",
+  "name": "@someok/pi-session-namer",
+  "version": "0.4.0",
   "description": "Automatically name and update Pi sessions from the current conversation",
   "type": "module",
   "license": "MIT",
-  "author": "Joshua Zeng",
+  "author": "someok",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joshua-zyy/pi-session-namer.git"
+    "url": "git+https://github.com/someok/pi-session-namer.git"
   },
   "bugs": {
-    "url": "https://github.com/joshua-zyy/pi-session-namer/issues"
+    "url": "https://github.com/someok/pi-session-namer/issues"
   },
-  "homepage": "https://github.com/joshua-zyy/pi-session-namer#readme",
+  "homepage": "https://github.com/someok/pi-session-namer#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "pi-package",
     "pi-extension",
     "pi",
     "session",
+    "session-name",
+    "auto-naming",
     "naming"
   ],
   "engines": {
@@ -33,15 +38,14 @@
     "session-namer.example.json",
     "README.md",
     "README.zh-CN.md",
-    "LICENSE",
-    "package.json"
+    "LICENSE"
   ],
   "scripts": {
     "test": "tsc --outDir .tmp-test --noEmit false && node --test .tmp-test/test/*.test.js"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-ai": ">=0.84.0",
+    "@earendil-works/pi-coding-agent": ">=0.84.0"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.84.4",

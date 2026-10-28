@@ -2,6 +2,8 @@
 
 [Pi](https://github.com/badlogic/pi-mono) 的自动会话命名扩展。
 
+> 本项目 fork 自 [joshua-zyy/pi-session-namer](https://github.com/joshua-zyy/pi-session-namer)，以 `@someok/pi-session-namer` 发布到 npm，包含上游尚未合并的修复。
+
 插件会根据当前对话内容，为 Pi session 自动生成并定期更新名称，格式为：
 
 ```text
@@ -46,13 +48,13 @@ pi -e ./src/index.ts
 从 npm 安装为 Pi package：
 
 ```bash
-pi install npm:pi-session-namer
+pi install npm:@someok/pi-session-namer
 ```
 
 从 Git 安装为 Pi package：
 
 ```bash
-pi install git:github.com/joshua-zyy/pi-session-namer
+pi install git:github.com/someok/pi-session-namer
 ```
 
 安装或修改源码后，重新启动 Pi，或执行：
@@ -60,6 +62,8 @@ pi install git:github.com/joshua-zyy/pi-session-namer
 ```text
 /reload
 ```
+
+不要同时安装本包和上游 `pi-session-namer`。两者共用同一个配置文件（`~/.pi/agent/session-namer.json`）和同一个 session entry type，会互相覆盖命名状态。
 
 ## 命令
 
