@@ -1,6 +1,6 @@
 {
   "name": "@someok/pi-session-namer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Automatically name and update Pi sessions from the current conversation",
   "type": "module",
   "license": "MIT",
@@ -31,13 +31,15 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "changelogPath": "CHANGELOG.md"
   },
   "files": [
     "src/index.ts",
     "session-namer.example.json",
     "README.md",
     "README.zh-CN.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
@@ -48,8 +50,8 @@
     "@earendil-works/pi-coding-agent": ">=0.84.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.4",
-    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-ai": "^1.5.0",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
     "@types/node": "^26.4.1",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
